@@ -1,19 +1,21 @@
 import streamlit as st
+from torch.utils import data
 from transformers import pipeline
 
 from PyPDF2 import PdfFileReader
+from fpdf import FPDF
 import docx2txt
 
 import string
-string.punctuation
+import base64
 
 import nltk
 #Stop words present in the library
 stopwords = nltk.corpus.stopwords.words('english')
 
-max = st.sidebar.slider('Select max', 50, 500, step=10, value=150)
-min = st.sidebar.slider('Select min', 10, 450, step=10, value=50)
-do_sample = st.sidebar.checkbox("Do sample", value=False)
+max = st.sidebar.slider('Select max words', 50, 500, step=10, value=150)
+min = st.sidebar.slider('Select min words', 10, 450, step=10, value=50)
+
 
 def remove_stopwords(text):
 	output= [i for i in text if i not in stopwords]
@@ -24,6 +26,9 @@ def remove_punctuation(text):
 	punctuationfree="".join([i for i in text if i not in string.punctuation])
 	return punctuationfree
 
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)  # val looks like b'...'
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}.pdf">Download file</a>'
 
 @st.cache(allow_output_mutation=True)
 def load_summarizer():
@@ -68,14 +73,12 @@ def read_pdf(file):
 		# raw_text = remove_stopwords(raw_text)
 		raw_text_preprocessed = remove_punctuation(raw_text)
 
-		summarized_text = summarized_text + '\n\n\n' + "PAGE: {}: ".format(i + 1) + text_summarizer(raw_text_preprocessed, i)
-		all_page_text = all_page_text + '\n\n\n' + "PAGE: {}: ".format(i + 1) + raw_text
+		summarized_text = summarized_text + '\n\n\n' + "PAGE {}: ".format(i + 1) + text_summarizer(raw_text_preprocessed, i)
+		all_page_text = all_page_text + '\n\n\n' + "PAGE {}: ".format(i + 1) + raw_text
 
 	return all_page_text, summarized_text
 
 def text_summarizer(raw_text, i):
-	
-	# button = st.button("Summarize")
 
 	with st.spinner("Generating Summary [PAGE: {}] ...".format(i + 1)):
 		if raw_text:
@@ -83,7 +86,7 @@ def text_summarizer(raw_text, i):
 			res = summarizer(chunks,
 							max_length=max, 
 							min_length=min, 
-							do_sample=do_sample)
+							do_sample=False)
 			text = ' '.join([summ['summary_text'] for summ in res])
 
 		return text
@@ -111,6 +114,23 @@ if st.button("Process"):
 
 			st.text_area('Loaded from pdf: {}'.format(docx_file.name), value=raw_text, height=500, max_chars=None, key=None)
 			st.text_area('Summarized Text: ', value=summarized_text, height=500, max_chars=None, key=None)
+
+			st.download_button(label= "Export Report TXT", data= summarized_text, file_name='summarized_text_'+docx_file.name.split('.')[0] + '.txt', mime="text/plain")
+
+			
+			# try:
+
+			# 	pdf = FPDF()
+			# 	pdf.add_page()
+			# 	pdf.set_font('Arial', 'B', 16)
+			# 	# for x in summarized_text:
+			# 	pdf.cell(200, 10, txt = summarized_text, ln = 1, align = 'C')
+
+			# 	html = create_download_link(pdf.output(dest="S").encode("latin-1"), 'summarized_text_'+docx_file.name)
+			# 	st.markdown(html, unsafe_allow_html=True)
+
+			# except Exception as e:
+			# 	print("Export Report ERROR: ", e)
 			
 		
 		elif docx_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
