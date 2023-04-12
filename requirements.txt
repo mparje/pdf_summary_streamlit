@@ -3,3 +3,4 @@ torch
 transformers
 pypdf2
 fpdf
+docx2txt
